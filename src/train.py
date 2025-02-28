@@ -41,7 +41,7 @@ from src.utils.logging import (
     grad_logger,
     AverageMeter)
 from src.utils.tensors import repeat_interleave_batch
-from src.datasets.imagenet1k import make_imagenet1k
+from src.datasets.imagenet1k import make_iuxray
 
 from src.helper import (
     load_checkpoint,
@@ -125,7 +125,17 @@ def main(args, resume_preempt=False):
     folder = args['logging']['folder']
     tag = args['logging']['write_tag']
 
+    # Ensure the folder exists
+    os.makedirs(folder, exist_ok=True)
+
     dump = os.path.join(folder, 'params-ijepa.yaml')
+
+    # Ensure the file exists
+    if not os.path.exists(dump):
+        with open(dump, 'w') as f:
+            f.write('')  # Create an empty file
+
+    # Write the YAML data
     with open(dump, 'w') as f:
         yaml.dump(args, f)
     # ----------------------------------------------------------------------- #
@@ -189,17 +199,16 @@ def main(args, resume_preempt=False):
         color_jitter=color_jitter)
 
     # -- init data-loaders/samplers
-    _, unsupervised_loader, unsupervised_sampler = make_imagenet1k(
+    _, unsupervised_loader, unsupervised_sampler = make_iuxray(
             transform=transform,
             batch_size=batch_size,
             collator=mask_collator,
             pin_mem=pin_mem,
-            training=True,
+            split="train",
             num_workers=num_workers,
             world_size=world_size,
             rank=rank,
             root_path=root_path,
-            image_folder=image_folder,
             copy_data=copy_data,
             drop_last=True)
     ipe = len(unsupervised_loader)
