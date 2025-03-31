@@ -41,7 +41,7 @@ from src.utils.logging import (
     grad_logger,
     AverageMeter)
 from src.utils.tensors import repeat_interleave_batch
-from src.datasets.imagenet1k import make_iuxray
+from src.datasets.imagenet1k import make_isic_dataloader
 
 from src.helper import (
     load_checkpoint,
@@ -199,7 +199,7 @@ def main(args, resume_preempt=False):
         color_jitter=color_jitter)
 
     # -- init data-loaders/samplers
-    _, unsupervised_loader, unsupervised_sampler = make_iuxray(
+    _, unsupervised_loader, unsupervised_sampler = make_isic_dataloader(
             transform=transform,
             batch_size=batch_size,
             collator=mask_collator,

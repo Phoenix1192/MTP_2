@@ -1,137 +1,110 @@
 import os
 import random
-import time
-import numpy as np
-from logging import getLogger
-from PIL import Image
-
 import torch
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
 import torchvision.transforms as transforms
+from PIL import Image
+from logging import getLogger
 
-_GLOBAL_SEED = 0
 logger = getLogger()
 
-class IUXrayNoLabel(Dataset):
-    def __init__(self, root, split='train', transform=None,
-                 train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, seed=0):
+class ISICDataset(Dataset):
+    def __init__(self, root_path, split='train', transform=None):
         """
-        IUXrayNoLabel Dataset
-
-        :param root: Directory containing all IUXray images.
+        ISIC Dataset Loader
+        :param root_path: Path to the ISIC dataset directory.
         :param split: One of 'train', 'val', or 'test'.
-        :param transform: Transformations to apply to the images.
-        :param train_ratio: Fraction of data for training.
-        :param val_ratio: Fraction of data for validation.
-        :param test_ratio: Fraction of data for testing.
-        :param seed: Random seed for reproducibility.
+        :param transform: Image transformations.
         """
-        self.root = root
-        self.transform = transform
+        self.root_path = root_path
         self.split = split
-
-        # List all image files (supporting common image formats)
-        all_files = [os.path.join(root, f) for f in os.listdir(root)
-                     if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-        all_files.sort()  # Ensure a fixed order
-
-        # Shuffle the list to ensure randomness in the splits
-        random.seed(seed)
-        random.shuffle(all_files)
-
-        n = len(all_files)
-        train_end = int(train_ratio * n)
-        val_end = train_end + int(val_ratio * n)
-
-        if split == 'train':
-            self.files = all_files[:train_end]
-        elif split == 'val':
-            self.files = all_files[train_end:val_end]
-        elif split == 'test':
-            self.files = all_files[val_end:]
-        else:
-            raise ValueError("split must be one of 'train', 'val', or 'test'")
-
-        logger.info(f'IUXrayNoLabel: {split} split with {len(self.files)} images.')
+        self.transform = transform
+        
+        split_map = {
+            'train': 'ISIC-2017_Training_Data/ISIC-2017_Training_Data',
+            'val': 'ISIC-2017_Validation_Data/ISIC-2017_Validation_Data',
+            'test': 'ISIC-2017_Test_v2_Data/ISIC-2017_Test_v2_Data'
+        }
+        
+        if split not in split_map:
+            raise ValueError("Split must be 'train', 'val', or 'test'")
+        
+        self.image_dir = os.path.join(root_path, split_map[split])
+        self.image_files = sorted([f for f in os.listdir(self.image_dir) if f.endswith(('.jpg'))])
+        logger.info(f'Loaded {len(self.image_files)} images for {split} split.')
 
     def __len__(self):
-        return len(self.files)
+        return len(self.image_files)
 
     def __getitem__(self, index):
-        img_path = self.files[index]
-        img = Image.open(img_path)
-        if self.transform is not None:
-            img = self.transform(img)
-        return img
+        img_path = os.path.join(self.image_dir, self.image_files[index])
+        image = Image.open(img_path).convert('RGB')
+        
+        if self.transform:
+            image = self.transform(image)
+        
+        return image
 
 
-def make_iuxray(
+def make_isic_dataloader(
+    root_path,
     transform,
     batch_size,
     split='train',
     collator=None,
     pin_mem=True,
-    num_workers=8,
+    num_workers=4,
     world_size=1,
     rank=0,
-    root_path=None,
     copy_data=False,
-    drop_last=True,
+    drop_last=True
 ):
     """
-    Creates the IUXray dataset and DataLoader for the given split.
+    Creates an ISIC dataset and DataLoader.
     
-    :param transform: Transformations to apply to each image.
-    :param batch_size: Batch size.
+    :param root_path: Path to the ISIC dataset directory.
+    :param transform: Image transformations.
+    :param batch_size: Number of images per batch.
     :param split: 'train', 'val', or 'test'.
-    :param root_path: Directory where all IUXray images are stored.
-    Other parameters follow the typical ImageNet-style function signature.
+    :param collator: Function to customize how a batch is created.
+    :param pin_mem: Whether to use pinned memory for faster GPU transfers.
+    :param num_workers: Number of parallel data loading workers.
+    :param world_size: Total number of processes (for distributed training).
+    :param rank: Process rank in distributed training.
+    :param copy_data: Whether to copy dataset locally for faster access.
+    :param drop_last: Whether to drop the last batch if it's smaller than batch_size.
     """
-    # If a mechanism for local copy is needed, integrate that logic here.
-    dataset = IUXrayNoLabel(root=root_path, split=split, transform=transform)
-    logger.info(f'IUXray dataset created for {split} split.')
-
-    dist_sampler = DistributedSampler(
-        dataset=dataset,
-        num_replicas=world_size,
-        rank=rank
-    )
-
-    data_loader = DataLoader(
+    dataset = ISICDataset(root_path=root_path, split=split, transform=transform)
+    sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank)
+    
+    dataloader = DataLoader(
         dataset,
-        collate_fn=collator,
-        sampler=dist_sampler,
         batch_size=batch_size,
-        drop_last=drop_last,
-        pin_memory=pin_mem,
+        sampler=sampler,
         num_workers=num_workers,
-        persistent_workers=False
+        pin_memory=pin_mem,
+        drop_last=drop_last,
+        collate_fn=collator  # Include collator if provided
     )
-    logger.info('IUXray DataLoader created.')
-    return dataset, data_loader, dist_sampler
+    
+    return dataset, dataloader, sampler
 
-
-# Example usage:
+# Example usage
 if __name__ == "__main__":
-    # Define image transformations (modify as needed)
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
-        transforms.ToTensor(),
+        transforms.ToTensor()
     ])
-
-    # Update this path to point to your folder containing all IUXray images.
-    root_path = "/home/karthik_r/MTP/ijepa/images/images_normalized"
-
-    # Create the training DataLoader
-    dataset, data_loader, sampler = make_iuxray(
+    
+    root_path = "/path/to/ISIC"  # Update this path
+    dataset, data_loader, sampler = make_isic_dataloader(
+        root_path=root_path,
         transform=transform,
         batch_size=32,
         split='train',
-        root_path=root_path,
         num_workers=4
     )
-
-    # Iterate over one batch and print shape
+    
     for images in data_loader:
         print(f"Batch shape: {images.shape}")
         break

@@ -75,6 +75,7 @@ def init_model(
 ):
     if model_name == "vit_tiny":
         encoder = timm.create_model("vit_tiny_patch16_224", pretrained=True)
+        encoder.num_heads = encoder.blocks[0].attn.num_heads
     else:
         encoder = vit.__dict__[model_name](
             img_size=[crop_size],
@@ -96,8 +97,9 @@ def init_model(
             torch.nn.init.constant_(m.bias, 0)
             torch.nn.init.constant_(m.weight, 1.0)
 
-    for m in encoder.modules():
-        init_weights(m)
+    if model_name != "vit_tiny":
+        for m in encoder.modules():
+            init_weights(m)
 
     for m in predictor.modules():
         init_weights(m)
