@@ -7,7 +7,7 @@
 
 import logging
 import sys
-
+import timm
 import torch
 
 import src.models.vision_transformer as vit
@@ -73,9 +73,13 @@ def init_model(
     pred_depth=6,
     pred_emb_dim=384
 ):
-    encoder = vit.__dict__[model_name](
-        img_size=[crop_size],
-        patch_size=patch_size)
+    if model_name == "vit_tiny":
+        encoder = timm.create_model("vit_tiny_patch16_224", pretrained=True)
+    else:
+        encoder = vit.__dict__[model_name](
+            img_size=[crop_size],
+            patch_size=patch_size)
+
     predictor = vit.__dict__['vit_predictor'](
         num_patches=encoder.patch_embed.num_patches,
         embed_dim=encoder.embed_dim,
