@@ -16,21 +16,40 @@ class ISICDataset(Dataset):
         :param split: One of 'train', 'val', or 'test'.
         :param transform: Image transformations.
         """
-        self.root_path = root_path
+        self.root_path = os.path.abspath(root_path)  # Ensure proper path format
         self.split = split
         self.transform = transform
         
         split_map = {
-            'train': 'ISIC-2017_Training_Data/ISIC-2017_Training_Data',
-            'val': 'ISIC-2017_Validation_Data/ISIC-2017_Validation_Data',
-            'test': 'ISIC-2017_Test_v2_Data/ISIC-2017_Test_v2_Data'
+            'train': 'ISIC-2017_Training_Data',
+            'val': 'ISIC-2017_Validation_Data',
+            'test': 'ISIC-2017_Test_v2_Data'
         }
         
         if split not in split_map:
             raise ValueError("Split must be 'train', 'val', or 'test'")
         
-        self.image_dir = os.path.join(root_path, split_map[split])
-        self.image_files = sorted([f for f in os.listdir(self.image_dir) if f.endswith(('.jpg'))])
+        # First level directory
+        base_dir = os.path.join(self.root_path, split_map[split])
+
+        # If there's an extra nested folder, go deeper
+        subdirs = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
+        if len(subdirs) == 1:  # If exactly one subfolder exists, go into it
+            self.image_dir = os.path.join(base_dir, subdirs[0])
+        else:
+            self.image_dir = base_dir  # Use base directory if no extra nesting
+
+        if not os.path.exists(self.image_dir):
+            raise FileNotFoundError(f"Directory does not exist: {self.image_dir}")
+
+        self.image_files = sorted([
+            f for f in os.listdir(self.image_dir) 
+            if f.lower().endswith(('.jpg', '.png', '.jpeg'))
+        ])
+
+        if not self.image_files:
+            raise FileNotFoundError(f"No images found in directory: {self.image_dir}")
+
         logger.info(f'Loaded {len(self.image_files)} images for {split} split.')
 
     def __len__(self):
@@ -89,6 +108,7 @@ def make_isic_dataloader(
     
     return dataset, dataloader, sampler
 
+
 # Example usage
 if __name__ == "__main__":
     transform = transforms.Compose([
@@ -96,7 +116,7 @@ if __name__ == "__main__":
         transforms.ToTensor()
     ])
     
-    root_path = "/path/to/ISIC"  # Update this path
+    root_path = "/kaggle/input/ISIC-2017"  # Update this path if needed
     dataset, data_loader, sampler = make_isic_dataloader(
         root_path=root_path,
         transform=transform,

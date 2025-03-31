@@ -8,7 +8,7 @@ data:
   image_folder: ISIC-2017
   num_workers: 10
   pin_mem: true
-  root_path: /kaggle/input
+  root_path: /kaggle/input/ISIC-2017
   use_color_distortion: false
   use_gaussian_blur: false
   use_horizontal_flip: false
