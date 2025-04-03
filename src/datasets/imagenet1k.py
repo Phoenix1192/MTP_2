@@ -44,9 +44,9 @@ class ISICDataset(Dataset):
 
         self.image_files = sorted([
             f for f in os.listdir(self.image_dir) 
-            if f.lower().endswith(('.jpg', '.png', '.jpeg'))
+            if f.lower().endswith(('.jpg', '.jpeg'))
         ])
-
+        print("Images in the "  + str(split) + str(len(self.image_files)))
         if not self.image_files:
             raise FileNotFoundError(f"No images found in directory: {self.image_dir}")
 
@@ -95,6 +95,7 @@ def make_isic_dataloader(
     """
     dataset = ISICDataset(root_path=root_path, split=split, transform=transform)
     sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank)
+    print("Image Batch Size: " + str(batch_size))
     
     dataloader = DataLoader(
         dataset,
@@ -105,7 +106,7 @@ def make_isic_dataloader(
         drop_last=drop_last,
         collate_fn=collator  # Include collator if provided
     )
-    
+    print("Mask collator type:", type(collator))
     return dataset, dataloader, sampler
 
 
